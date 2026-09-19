@@ -47,6 +47,17 @@ Instead of staring at dry terminal text from `tracert` or `traceroute`, Visual T
   - Toggle between **11x (Region)**, **13x (City)**, and **15x (Neighborhood/Street)** zoom.
   - Includes a direct **"🌐 Google Maps"** deep link to launch full 3D satellite and Google Street View.
 
+- 🛑 **Live Trace Cancellation & Hotkeys**:
+  - Stop long-running probe streams anytime with a single click on the active "Stop Trace" button or pressing `Esc`.
+  - Automatic background subprocess termination ensures zero orphaned `tracert` or `traceroute` processes.
+
+- 📋 **One-Click IP Copy & Telemetry Feedback**:
+  - Click any hop IP in the timeline or map popup to instantly copy it to your clipboard with animated toast confirmation.
+
+- 🌐 **IPv4/IPv6 Dual-Stack & CGNAT Awareness**:
+  - Intelligently detects and filters private ranges and Carrier-Grade NAT (CGNAT, RFC 6598) subnets (`100.64.0.0/10`) to eliminate wasted geocoding requests.
+  - Supports both IPv4 and IPv6 target hosts and probes.
+
 - 📊 **Network Analytics & KPI Dashboard**:
   - Total hops count & geocoded node counter.
   - Average round-trip latency (color-coded: green < 35ms, yellow 35-90ms, red > 90ms).
@@ -76,13 +87,13 @@ Instead of staring at dry terminal text from `tracert` or `traceroute`, Visual T
 
 ### 2. Clone the Repository
 ```bash
-git clone https://github.com/your-username/visual-traceroute.git
-cd visual-traceroute
+git clone https://github.com/farhansiddiquee116/Traceroute-Application.git
+cd Traceroute-Application
 ```
 
 ### 3. Install Dependencies
 ```bash
-pip install fastapi uvicorn requests
+pip install -r requirements.txt
 ```
 
 ### 4. Run the Application
@@ -95,6 +106,10 @@ Navigate to:
 ```text
 http://localhost:8000
 ```
+API Documentation and Swagger UI are accessible at:
+```text
+http://localhost:8000/docs
+```
 
 ---
 
@@ -102,7 +117,7 @@ http://localhost:8000
 
 1. **Target Input**: Enter any hostname (e.g., `google.com`, `github.com`) or IP address (e.g., `1.1.1.1`), or select a quick preset.
 2. **Native Trace Execution**: The backend executes an optimized OS-level traceroute with a 1000ms probe timeout (`-w 1000`) to prevent long hangs on unresponsive hops.
-3. **Regex & Line-by-Line Parsing**: Each hop number, IP, and round-trip time (RTT) is extracted cleanly while discarding private/internal subnets (`192.168.x.x`, `10.x.x.x`, `127.x.x.x`).
+3. **Regex & Line-by-Line Parsing**: Each hop number, IP, and round-trip time (RTT) is extracted cleanly while discarding private/internal subnets (`192.168.x.x`, `10.x.x.x`, `127.x.x.x`, `100.64.x.x`).
 4. **Geolocation Enrichment**: Public IP addresses are resolved against geocoding endpoints, returning coordinates, city, country, and ISP.
 5. **SSE Streaming to Leaflet**: Each resolved node streams over HTTP to the frontend, instantly dropping a pulsing marker, rendering high-detail Google satellite tiles, and drawing animated glowing route polylines across the map.
 
@@ -113,20 +128,22 @@ http://localhost:8000
 ```text
 ├── TracerouteProject.py     # FastAPI backend server & traceroute stream engine
 ├── index.html               # Frontend dashboard, Google Satellite map & UI
+├── requirements.txt         # Project Python dependencies
 ├── README.md                # Project documentation
-└── LICENSE                  # MIT License
+├── LICENSE                  # MIT License
+└── .gitignore               # Git ignore rules
 ```
 
 ---
 
 ## 🛡️ License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
 
 ---
 
 ## 👨‍💻 Authors & Acknowledgments
 
-- Developed as an Advanced Networking & Visualization Minor Project.
-- Mapping powered by **Leaflet** & **Google Maps**.
+- **Farhan Siddiquee** ([@farhansiddiquee116](https://github.com/farhansiddiquee116)) - Core Development & System Architecture.
+- Mapping powered by **Leaflet** & **Google Maps Satellite**.
 - Geolocation telemetry powered by open community providers.
