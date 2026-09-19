@@ -32,21 +32,35 @@ origin_cache: Optional[Dict[str, Any]] = None
 HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
 
 def is_public_ip(ip_str: str) -> bool:
-    """Validate whether an IP address is a routable public IPv4/IPv6 address."""
+    """Validate whether an IP address is a globally routable public IPv4/IPv6 address."""
     if not ip_str:
         return False
     try:
         ip = ipaddress.ip_address(ip_str.strip())
-        return not (
-            ip.is_private
+        return ip.is_global and not (
+            ip.is_multicast
             or ip.is_loopback
-            or ip.is_reserved
             or ip.is_link_local
-            or ip.is_multicast
+            or ip.is_reserved
             or ip.is_unspecified
         )
     except ValueError:
         return False
+
+def extract_ip_from_line(line_text: str) -> Optional[str]:
+    """Extract an IPv4 or IPv6 address from a traceroute output line."""
+    m = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", line_text)
+    if m:
+        return m.group(0)
+    for token in line_text.split():
+        token_clean = token.strip("[](),")
+        if ":" in token_clean:
+            try:
+                ip = ipaddress.ip_address(token_clean)
+                return str(ip)
+            except ValueError:
+                pass
+    return None
 
 def compute_satellite_tile_url(lat: float, lon: float, zoom: int = 13) -> str:
     """Generate high-detail Google Maps Satellite Hybrid tile URL (Satellite + Roads + Labels)."""
@@ -215,8 +229,12 @@ def sanitize_target(target: str) -> str:
     """Sanitize target host/domain to prevent command injection."""
     cleaned = target.strip()
     cleaned = re.sub(r"^https?://", "", cleaned)
-    cleaned = cleaned.split("/")[0].split(":")[0]
-    if not re.match(r"^[a-zA-Z0-9.\-_]+$", cleaned):
+    cleaned = cleaned.split("/")[0]
+    if cleaned.startswith("[") and "]" in cleaned:
+        cleaned = cleaned[1:cleaned.index("]")]
+    elif ":" in cleaned and cleaned.count(":") == 1:
+        cleaned = cleaned.split(":")[0]
+    if not re.match(r"^[a-zA-Z0-9.\-_:]+$", cleaned):
         raise HTTPException(status_code=400, detail="Invalid target format. Please enter a valid domain or IP address.")
     return cleaned
 
@@ -244,6 +262,11 @@ def serve_home():
 def serve_index_alias():
     return serve_home()
 
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint for Docker and monitoring tools."""
+    return {"status": "ok", "version": "2.2"}
+
 @app.get("/api/origin")
 def get_origin():
     """Return local client geolocation (Hop 0)."""
@@ -269,10 +292,24 @@ def trace_route(target: str = "google.com", max_hops: int = 15):
     max_hops = max(1, min(max_hops, 30))
 
     is_win = platform.system() == "Windows"
-    cmd = ["tracert", "-d", "-h", str(max_hops), "-w", "1000", target] if is_win else ["traceroute", "-n", "-m", str(max_hops), "-w", "1", target]
+    is_ipv6 = ":" in target
+    if is_win:
+        ip_flag = "-6" if is_ipv6 else "-4"
+        cmd = ["tracert", "-d", ip_flag, "-h", str(max_hops), "-w", "1000", target]
+    else:
+        ip_flag = "-6" if is_ipv6 else "-4"
+        cmd = ["traceroute", ip_flag, "-n", "-m", str(max_hops), "-w", "1", target]
 
     try:
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120
+        )
         output_lines = proc.stdout.splitlines()
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="Traceroute command timed out")
@@ -298,8 +335,7 @@ def trace_route(target: str = "google.com", max_hops: int = 15):
         avg_rtt = parse_rtts(rtts)
         timed_out = "Request timed out" in rest or (avg_rtt is None and "*" in rest)
 
-        ip_match = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", rest)
-        ip = ip_match.group(0) if ip_match else None
+        ip = extract_ip_from_line(rest)
 
         geo = None
         if ip and is_public_ip(ip):
@@ -331,53 +367,69 @@ def trace_route_stream(target: str = "google.com", max_hops: int = 15):
         yield f"data: {json.dumps({'type': 'origin', 'data': origin})}\n\n"
 
         is_win = platform.system() == "Windows"
-        cmd = ["tracert", "-d", "-h", str(max_hops), "-w", "1000", target] if is_win else ["traceroute", "-n", "-m", str(max_hops), "-w", "1", target]
+        is_ipv6 = ":" in target
+        if is_win:
+            ip_flag = "-6" if is_ipv6 else "-4"
+            cmd = ["tracert", "-d", ip_flag, "-h", str(max_hops), "-w", "1000", target]
+        else:
+            ip_flag = "-6" if is_ipv6 else "-4"
+            cmd = ["traceroute", ip_flag, "-n", "-m", str(max_hops), "-w", "1", target]
 
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1
         )
 
         hop_count = 0
 
-        for raw_line in iter(proc.stdout.readline, ''):
-            line = raw_line.strip()
-            if not line:
-                continue
+        try:
+            for raw_line in iter(proc.stdout.readline, ''):
+                line = raw_line.strip()
+                if not line:
+                    continue
 
-            m = re.match(r"^(\d+)\s+(.+)$", line)
-            if m:
-                hop_num = int(m.group(1))
-                rest = m.group(2)
-                hop_count += 1
+                m = re.match(r"^(\d+)\s+(.+)$", line)
+                if m:
+                    hop_num = int(m.group(1))
+                    rest = m.group(2)
+                    hop_count += 1
 
-                rtts = re.findall(r"(?:<1|\d+(?:\.\d+)?)\s*ms|\*", rest)
-                avg_rtt = parse_rtts(rtts)
-                timed_out = "Request timed out" in rest or (avg_rtt is None and "*" in rest)
+                    rtts = re.findall(r"(?:<1|\d+(?:\.\d+)?)\s*ms|\*", rest)
+                    avg_rtt = parse_rtts(rtts)
+                    timed_out = "Request timed out" in rest or (avg_rtt is None and "*" in rest)
 
-                ip_match = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", rest)
-                ip = ip_match.group(0) if ip_match else None
+                    ip = extract_ip_from_line(rest)
 
-                geo = None
-                if ip and is_public_ip(ip):
-                    geo = get_geolocation(ip)
+                    geo = None
+                    if ip and is_public_ip(ip):
+                        geo = get_geolocation(ip)
 
-                hop_data = {
-                    "hop": hop_num,
-                    "ip": ip,
-                    "rtt": avg_rtt,
-                    "timed_out": timed_out,
-                    "geo": geo
-                }
-                yield f"data: {json.dumps({'type': 'hop', 'data': hop_data})}\n\n"
+                    hop_data = {
+                        "hop": hop_num,
+                        "ip": ip,
+                        "rtt": avg_rtt,
+                        "timed_out": timed_out,
+                        "geo": geo
+                    }
+                    yield f"data: {json.dumps({'type': 'hop', 'data': hop_data})}\n\n"
 
-        proc.stdout.close()
-        proc.wait()
-
-        yield f"data: {json.dumps({'type': 'done', 'target': target, 'total_hops': hop_count})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'target': target, 'total_hops': hop_count})}\n\n"
+        finally:
+            try:
+                proc.stdout.close()
+            except Exception:
+                pass
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except Exception:
+                    proc.kill()
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
