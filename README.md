@@ -11,12 +11,17 @@
 
 ---
 
-## 📸 Architecture Flow
+## 📸 Overview
 
 ```text
  [Your Location] ──────> [ISP Gateway] ──────> [Underwater Cables / Backbones] ──────> [Destination Server]
       (Delhi)             (Regional Router)             (Frankfurt / Tokyo)                   (Google / Cloudflare)
 ```
+
+Instead of staring at dry terminal text from `tracert` or `traceroute`, Visual Traceroute renders:
+- Live streaming packet discovery via **Server-Sent Events (SSE)**.
+- High-resolution **Google Maps Satellite Hybrid** imagery showing streets, highways, borders, and landmarks.
+- Detailed network telemetry: round-trip time (RTT latency), ISP, ASN, city, and geodesic distance.
 
 ---
 
@@ -28,7 +33,7 @@
   - Multi-layer toggle: **Google Satellite Hybrid**, **Pure Satellite**, **Terrain/Relief**, and **Dark Cyber (NOC mode)**.
 
 - ⚡ **Real-Time Live Streaming (SSE)**:
-  - Utilizes Server-Sent Events (`/api/trace/stream`) so hops drop onto the map and sidebar timeline progressively as each router responds. No frozen screens or long blank waits.
+  - Utilizes Server-Sent Events (`/api/trace/stream`) so hops drop onto the map and sidebar timeline progressively as each router responds. No frozen screens or 40-second blank waits.
 
 - 🔑 **Zero API Key Requirement (100% Free & Unlimited)**:
   - Built-in resilient 3-tier fallback chain (`ip-api` → `ipwho.is` → `freeipapi`) with in-memory caching.
@@ -77,7 +82,7 @@ cd visual-traceroute
 
 ### 3. Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install fastapi uvicorn requests
 ```
 
 ### 4. Run the Application
@@ -108,12 +113,20 @@ http://localhost:8000
 ```text
 ├── TracerouteProject.py     # FastAPI backend server & traceroute stream engine
 ├── index.html               # Frontend dashboard, Google Satellite map & UI
-├── requirements.txt         # Project dependencies
-└── README.md                # Project documentation
+├── README.md                # Project documentation
+└── LICENSE                  # MIT License
 ```
 
 ---
 
 ## 🛡️ License
 
-Distributed under the **MIT License**.
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
+---
+
+## 👨‍💻 Authors & Acknowledgments
+
+- Developed as an Advanced Networking & Visualization Minor Project.
+- Mapping powered by **Leaflet** & **Google Maps**.
+- Geolocation telemetry powered by open community providers.

@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Traceroute | Google Maps Detailed Geosatellite Visualizer</title>
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <style>
+        :root {
+            --bg-base: #0a0e17;
+            --bg-surface: rgba(16, 23, 38, 0.92);
+            --bg-card: rgba(22, 33, 54, 0.85);
+            --border-color: rgba(56, 75, 110, 0.45);
+            --border-focus: #06b6d4;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-purple: #8b5cf6;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --font-ui: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            height: 62px;
+            background: rgba(10, 14, 23, 0.96);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 1000;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #06b6d4, #2563eb);
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 16px rgba(6, 182, 212, 0.45);
+        }
+
+        .brand-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: white;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .brand h1 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-badges {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .google-sat-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 5px 12px;
+            background: rgba(6, 182, 212, 0.12);
+            border: 1px solid rgba(6, 182, 212, 0.35);
+            border-radius: 9999px;
+            color: #38bdf8;
+        }
+
+        .free-key-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 5px 12px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            border-radius: 9999px;
+            color: #34d399;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.82rem;
+            padding: 5px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 9999px;
+            color: var(--text-muted);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-amber);
+            box-shadow: 0 0 8px var(--accent-amber);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.active {
+            background-color: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        .status-dot.ready {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .status-dot.error {
+            background-color: var(--accent-rose);
+            box-shadow: 0 0 8px var(--accent-rose);
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.3); }
+        }
+
+        /* Workspace */
+        .workspace {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 450px;
+            min-width: 380px;
+            max-width: 480px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 500;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-content {
+            padding: 18px 20px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .sidebar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.25);
+            border-radius: 3px;
+        }
+
+        /* Controls */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .target-input-wrap {
+            position: relative;
+            flex: 1;
+        }
+
+        .target-input {
+            width: 100%;
+            height: 42px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0 12px 0 38px;
+            color: white;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .target-input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: var(--text-dim);
+            pointer-events: none;
+        }
+
+        .hops-select {
+            height: 42px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0 10px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .btn-trace {
+            height: 44px;
+            background: linear-gradient(135deg, #06b6d4, #2563eb);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
+        }
+
+        .btn-trace:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.5);
+        }
+
+        .btn-trace:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            filter: grayscale(0.5);
+        }
+
+        .preset-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .preset-chip {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(56, 75, 110, 0.4);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: var(--font-mono);
+        }
+
+        .preset-chip:hover {
+            background: rgba(6, 182, 212, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        /* Detailed Google Satellite Inspector Card */
+        .satellite-inspector {
+            background: var(--bg-card);
+            border: 1px solid rgba(6, 182, 212, 0.4);
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+        }
+
+        .satellite-inspector-header {
+            background: rgba(6, 182, 212, 0.12);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(6, 182, 212, 0.25);
+        }
+
+        .sat-head-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sat-zoom-toggles {
+            display: flex;
+            gap: 4px;
+        }
+
+        .sat-zoom-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(56, 75, 110, 0.5);
+            color: var(--text-muted);
+            font-size: 0.68rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .sat-zoom-btn.active, .sat-zoom-btn:hover {
+            background: var(--accent-cyan);
+            color: black;
+            font-weight: 600;
+            border-color: var(--accent-cyan);
+        }
+
+        .satellite-image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 155px;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .satellite-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.4s ease;
+        }
+
+        .satellite-inspector:hover .satellite-img {
+            transform: scale(1.04);
+        }
+
+        .sat-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 36px;
+            height: 36px;
+            border: 2px dashed rgba(6, 182, 212, 0.9);
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.6);
+        }
+
+        .sat-crosshair::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px;
+            height: 6px;
+            background: #f43f5e;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #f43f5e;
+        }
+
+        .satellite-info-footer {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            background: rgba(15, 23, 42, 0.75);
+        }
+
+        .sat-loc-text {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .sat-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-sat-action {
+            background: rgba(6, 182, 212, 0.15);
+            border: 1px solid rgba(6, 182, 212, 0.35);
+            color: var(--accent-cyan);
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-sat-action:hover {
+            background: var(--accent-cyan);
+            color: black;
+            font-weight: 600;
+        }
+
+        /* KPI Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .stat-label {
+            font-size: 0.73rem;
+            color: var(--text-dim);
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--text-main);
+        }
+
+        .stat-sub {
+            font-size: 0.7rem;
+            color: var(--accent-cyan);
+        }
+
+        /* Hop Timeline */
+        .hops-container {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .hop-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 11px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .hop-item:hover, .hop-item.active {
+            border-color: var(--accent-cyan);
+            background: rgba(30, 41, 59, 0.95);
+            transform: translateX(2px);
+        }
+
+        .hop-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hop-badge {
+            width: 25px;
+            height: 25px;
+            border-radius: 6px;
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+        }
+
+        .hop-badge.origin {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+
+        .hop-badge.target {
+            background: rgba(244, 63, 94, 0.15);
+            color: var(--accent-rose);
+            border-color: rgba(244, 63, 94, 0.4);
+        }
+
+        .hop-details {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .hop-ip {
+            font-family: var(--font-mono);
+            font-size: 0.83rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .hop-location {
+            font-size: 0.73rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .hop-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 3px;
+        }
+
+        .latency-tag {
+            font-family: var(--font-mono);
+            font-size: 0.73rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .latency-tag.fast {
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.12);
+        }
+
+        .latency-tag.medium {
+            color: var(--accent-amber);
+            background: rgba(245, 158, 11, 0.12);
+        }
+
+        .latency-tag.slow {
+            color: var(--accent-rose);
+            background: rgba(244, 63, 94, 0.12);
+        }
+
+        .latency-tag.timeout {
+            color: var(--text-dim);
+        }
+
+        .hop-isp {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            max-width: 100px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Map Container */
+        #map {
+            flex: 1;
+            height: 100%;
+            background: #060911;
+        }
+
+        /* Floating Layer Switcher Controls */
+        .map-layer-switch {
+            position: absolute;
+            top: 18px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 4px;
+            z-index: 600;
+            display: flex;
+            gap: 4px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.55);
+        }
+
+        .layer-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 6px 11px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+
+        .layer-btn:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .layer-btn.active {
+            background: var(--accent-cyan);
+            color: #041017;
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.55);
+        }
+
+        /* Map Legend */
+        .map-legend {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 16px;
+            z-index: 500;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            font-size: 0.76rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        /* Leaflet Popups */
+        .leaflet-popup-content-wrapper {
+            background: rgba(15, 23, 42, 0.96) !important;
+            backdrop-filter: blur(14px);
+            color: var(--text-main) !important;
+            border: 1px solid var(--border-color);
+            border-radius: 10px !important;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.7) !important;
+            padding: 2px !important;
+        }
+
+        .leaflet-popup-tip {
+            background: rgba(15, 23, 42, 0.96) !important;
+        }
+
+        .popup-card {
+            width: 270px;
+            padding: 8px;
+            font-family: var(--font-ui);
+        }
+
+        .popup-satellite-thumb {
+            width: 100%;
+            height: 110px;
+            border-radius: 6px;
+            object-fit: cover;
+            margin-bottom: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .popup-title {
+            font-weight: 700;
+            font-size: 0.92rem;
+            color: var(--accent-cyan);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .popup-grid {
+            display: grid;
+            grid-template-columns: 75px 1fr;
+            row-gap: 3px;
+            font-size: 0.78rem;
+        }
+
+        .popup-label {
+            color: var(--text-dim);
+        }
+
+        .popup-val {
+            font-family: var(--font-mono);
+            color: var(--text-main);
+            word-break: break-all;
+        }
+
+        .popup-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-popup-action {
+            flex: 1;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            text-align: center;
+            text-decoration: none;
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(6, 182, 212, 0.35);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-popup-action:hover {
+            background: var(--accent-cyan);
+            color: black;
+            font-weight: 600;
+        }
+
+        /* Custom Marker Pulse */
+        .custom-pulse-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-cyan);
+            animation: ring-expand 2s ease-out infinite;
+        }
+
+        .pulse-core {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            border: 2px solid white;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        .pulse-core.origin {
+            background: var(--accent-green);
+            border-color: #d1fae5;
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+
+        .pulse-core.target {
+            background: var(--accent-rose);
+            border-color: #ffe4e6;
+            box-shadow: 0 0 12px var(--accent-rose);
+        }
+
+        .pulse-core.hop {
+            background: var(--accent-purple);
+            border-color: #ede9fe;
+            box-shadow: 0 0 8px var(--accent-purple);
+        }
+
+        @keyframes ring-expand {
+            0% { transform: scale(0.4); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        /* Footer */
+        .sidebar-footer {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-secondary {
+            flex: 1;
+            height: 36px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--text-dim);
+            color: white;
+            background: rgba(255,255,255,0.05);
+        }
+
+        @media (max-width: 900px) {
+            .workspace {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                max-width: 100%;
+                height: 50vh;
+            }
+            #map {
+                height: 50vh;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Bar -->
+    <header>
+        <div class="brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+            </div>
+            <h1>Visual Traceroute <span style="font-size: 0.75rem; font-weight: 600; color: var(--accent-cyan); margin-left: 6px; letter-spacing: 0.05em;">GOOGLE HYBRID v2.2</span></h1>
+        </div>
+
+        <div class="header-badges">
+            <div class="google-sat-badge" title="High-Detail Google Satellite with roads, highway badges, city names and landmarks">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                <span>Google Maps Satellite</span>
+            </div>
+
+            <div class="free-key-badge" title="Multi-provider fallback requires 0 API keys and never rate-limits">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>Zero API Key Required</span>
+            </div>
+
+            <div class="header-status" id="headerStatus">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="headerStatusText">Checking backend...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Workspace -->
+    <div class="workspace">
+        <!-- Sidebar Controls & Hops Feed -->
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <!-- Target Input -->
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Target Host / IP</span>
+                        <span id="originBadge" style="color: var(--accent-green); font-size: 0.73rem;">Detecting origin...</span>
+                    </div>
+                    <div class="input-row">
+                        <div class="target-input-wrap">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="targetInput" class="target-input" value="google.com" placeholder="e.g. google.com or 1.1.1.1" autocomplete="off" spellcheck="false">
+                        </div>
+                        <select id="maxHopsSelect" class="hops-select" title="Maximum Hops">
+                            <option value="12">12 Hops</option>
+                            <option value="15" selected>15 Hops</option>
+                            <option value="20">20 Hops</option>
+                            <option value="30">30 Hops</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Presets -->
+                <div class="control-group">
+                    <div class="control-label">Quick Presets</div>
+                    <div class="preset-row">
+                        <span class="preset-chip" onclick="setPreset('google.com')">google.com</span>
+                        <span class="preset-chip" onclick="setPreset('1.1.1.1')">cloudflare (1.1.1.1)</span>
+                        <span class="preset-chip" onclick="setPreset('github.com')">github.com</span>
+                        <span class="preset-chip" onclick="setPreset('bbc.co.uk')">bbc.co.uk (London)</span>
+                        <span class="preset-chip" onclick="setPreset('u-tokyo.ac.jp')">u-tokyo.ac.jp (Tokyo)</span>
+                    </div>
+                </div>
+
+                <!-- Trace Button -->
+                <button id="traceBtn" class="btn-trace" onclick="startTrace()">
+                    <span class="spinner" id="btnSpinner"></span>
+                    <svg id="btnIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span id="btnText">Start Visual Trace</span>
+                </button>
+
+                <!-- Detailed Google Satellite Inspector Card -->
+                <div class="satellite-inspector" id="satelliteInspector">
+                    <div class="satellite-inspector-header">
+                        <span class="sat-head-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                            Google Satellite Hybrid Inspector
+                        </span>
+                        <div class="sat-zoom-toggles">
+                            <button class="sat-zoom-btn" onclick="changeSatInspectZoom(11)">11x</button>
+                            <button class="sat-zoom-btn active" id="satZoomBtn13" onclick="changeSatInspectZoom(13)">13x</button>
+                            <button class="sat-zoom-btn" onclick="changeSatInspectZoom(15)">15x</button>
+                        </div>
+                    </div>
+                    <div class="satellite-image-wrapper">
+                        <img id="satInspectImg" class="satellite-img" src="https://mt1.google.com/vt/lyrs=y&x=5853&y=3414&z=13" alt="Google Satellite Hybrid imagery" />
+                        <div class="sat-crosshair"></div>
+                    </div>
+                    <div class="satellite-info-footer">
+                        <div>
+                            <div class="sat-loc-text" id="satInspectLoc">Delhi, India</div>
+                            <div style="font-size: 0.68rem; color: var(--text-dim); font-family: var(--font-mono);" id="satInspectCoords">28.6542° N, 77.2373° E</div>
+                        </div>
+                        <div class="sat-actions">
+                            <button class="btn-sat-action" onclick="zoomToCurrentSatLocation()">🛰️ Fly To</button>
+                            <a id="btnSatGmaps" class="btn-sat-action" href="https://www.google.com/maps/search/?api=1&query=28.6542,77.2373" target="_blank" title="Open location in Google Maps">
+                                🌐 Maps
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Metrics -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-label">Total Hops</span>
+                        <span class="stat-value" id="statHops">0</span>
+                        <span class="stat-sub" id="statHopsSub">0 Geolocated</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Avg Latency</span>
+                        <span class="stat-value" id="statLatency">--</span>
+                        <span class="stat-sub" id="statLatencySub">Round-trip (ms)</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Geodesic Distance</span>
+                        <span class="stat-value" id="statDistance">0 km</span>
+                        <span class="stat-sub">Across globe</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Trace State</span>
+                        <span class="stat-value" id="statStatus" style="font-size: 1rem; color: var(--accent-cyan);">Idle</span>
+                        <span class="stat-sub" id="statTarget">None</span>
+                    </div>
+                </div>
+
+                <!-- Hop Timeline -->
+                <div class="control-group" style="flex: 1;">
+                    <div class="control-label">
+                        <span>Hop Path Timeline</span>
+                        <span id="hopCountHeader" style="color: var(--accent-cyan);">0 Hops</span>
+                    </div>
+                    <div class="hops-container" id="hopsList">
+                        <div style="text-align: center; padding: 18px 0; color: var(--text-dim); font-size: 0.82rem;">
+                            No active trace. Start a trace to inspect live hops.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="sidebar-footer">
+                <button class="btn-secondary" onclick="clearMapAndResults()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Clear
+                </button>
+                <button class="btn-secondary" onclick="exportTraceData()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export JSON
+                </button>
+            </div>
+        </aside>
+
+        <!-- Interactive Leaflet Map -->
+        <div id="map"></div>
+
+        <!-- Floating Layer Switcher Controls (Google Maps Styling) -->
+        <div class="map-layer-switch">
+            <button class="layer-btn active" id="btnLayerGoogleHybrid" onclick="switchBaseLayer('google_hybrid')">
+                🛰️ Google Satellite Hybrid
+            </button>
+            <button class="layer-btn" id="btnLayerGoogleSat" onclick="switchBaseLayer('google_sat')">
+                🌍 Pure Satellite
+            </button>
+            <button class="layer-btn" id="btnLayerGoogleTerrain" onclick="switchBaseLayer('google_terrain')">
+                ⛰️ Terrain
+            </button>
+            <button class="layer-btn" id="btnLayerDark" onclick="switchBaseLayer('dark')">
+                🌌 Dark Cyber
+            </button>
+        </div>
+
+        <!-- Map Legend -->
+        <div class="map-legend">
+            <div class="legend-item">
+                <span class="legend-color" style="background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green);"></span>
+                <span>Hop 0 (Your Location)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: var(--accent-purple); box-shadow: 0 0 6px var(--accent-purple);"></span>
+                <span>Intermediate Router Hop</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: var(--accent-rose); box-shadow: 0 0 6px var(--accent-rose);"></span>
+                <span>Destination Server</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let map;
+        let activeBaseLayer;
+        let googleHybridLayer;
+        let googleSatLayer;
+        let googleTerrainLayer;
+        let darkLayer;
+        let polylineLayer = null;
+        let markers = [];
+        let geoNodes = [];
+        let hopsData = [];
+        let originNode = null;
+        let currentInspectedNode = null;
+        let currentSatInspectZoom = 13;
+        let isTracing = false;
+        let activeEventSource = null;
+
+        // Compute Google Maps Satellite Hybrid Tile URL
+        function getGoogleSatelliteTileUrl(lat, lon, zoom = 13) {
+            try {
+                const x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+                const latRad = lat * Math.PI / 180;
+                const y = Math.floor((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2 * Math.pow(2, zoom));
+                return `https://mt1.google.com/vt/lyrs=y&x=${x}&y=${y}&z=${zoom}`;
+            } catch (e) {
+                return 'https://mt1.google.com/vt/lyrs=y&x=5853&y=3414&z=13';
+            }
+        }
+
+        // Initialize Leaflet Map with Google Maps Satellite Hybrid
+        function initMap() {
+            map = L.map('map', {
+                center: [25.0, 15.0],
+                zoom: 3,
+                zoomControl: false,
+                attributionControl: false
+            });
+
+            L.control.zoom({ position: 'topright' }).addTo(map);
+
+            // 1. Google Maps Satellite Hybrid Layer (lyrs=y: Satellite + Roads + Labels + Highways)
+            googleHybridLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains: ['0', '1', '2', '3'],
+                attribution: 'Map & Imagery &copy; Google Maps'
+            });
+
+            // 2. Google Pure Satellite Layer (lyrs=s)
+            googleSatLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains: ['0', '1', '2', '3'],
+                attribution: 'Satellite Imagery &copy; Google'
+            });
+
+            // 3. Google Terrain Layer (lyrs=p)
+            googleTerrainLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains: ['0', '1', '2', '3'],
+                attribution: 'Map & Terrain &copy; Google'
+            });
+
+            // 4. CartoDB Dark Matter
+            darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                subdomains: 'abcd',
+                attribution: '&copy; CARTO'
+            });
+
+            // Default to Google Maps Satellite Hybrid
+            googleHybridLayer.addTo(map);
+            activeBaseLayer = 'google_hybrid';
+
+            L.control.attribution({ position: 'bottomright' })
+                .addAttribution('&copy; Google Maps Satellite')
+                .addTo(map);
+        }
+
+        // Switch Map View
+        function switchBaseLayer(type) {
+            document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+
+            if (map.hasLayer(googleHybridLayer)) map.removeLayer(googleHybridLayer);
+            if (map.hasLayer(googleSatLayer)) map.removeLayer(googleSatLayer);
+            if (map.hasLayer(googleTerrainLayer)) map.removeLayer(googleTerrainLayer);
+            if (map.hasLayer(darkLayer)) map.removeLayer(darkLayer);
+
+            if (type === 'google_hybrid') {
+                googleHybridLayer.addTo(map);
+                document.getElementById('btnLayerGoogleHybrid').classList.add('active');
+            } else if (type === 'google_sat') {
+                googleSatLayer.addTo(map);
+                document.getElementById('btnLayerGoogleSat').classList.add('active');
+            } else if (type === 'google_terrain') {
+                googleTerrainLayer.addTo(map);
+                document.getElementById('btnLayerGoogleTerrain').classList.add('active');
+            } else if (type === 'dark') {
+                darkLayer.addTo(map);
+                document.getElementById('btnLayerDark').classList.add('active');
+            }
+            activeBaseLayer = type;
+        }
+
+        // Custom Glowing Pulse Marker
+        function createPulsingIcon(type = 'hop') {
+            return L.divIcon({
+                className: 'custom-pulse-marker',
+                html: `
+                    <div class="pulse-ring" style="border-color: ${type === 'origin' ? '#10b981' : type === 'target' ? '#f43f5e' : '#8b5cf6'}"></div>
+                    <div class="pulse-core ${type}"></div>
+                `,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        }
+
+        // Update Google Satellite Inspector Card in Sidebar
+        function updateSatelliteInspector(node, label = 'Hop') {
+            if (!node || typeof node.lat !== 'number' || typeof node.lon !== 'number') return;
+            currentInspectedNode = node;
+
+            const satImgUrl = getGoogleSatelliteTileUrl(node.lat, node.lon, currentSatInspectZoom);
+            document.getElementById('satInspectImg').src = satImgUrl;
+            document.getElementById('satInspectLoc').innerText = [node.city, node.country].filter(Boolean).join(', ') || 'Unknown Location';
+            document.getElementById('satInspectCoords').innerText = `${node.lat.toFixed(4)}° N, ${node.lon.toFixed(4)}° E`;
+
+            const gmapsUrl = node.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${node.lat},${node.lon}`;
+            document.getElementById('btnSatGmaps').href = gmapsUrl;
+        }
+
+        function changeSatInspectZoom(zoom) {
+            currentSatInspectZoom = zoom;
+            document.querySelectorAll('.sat-zoom-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            if (currentInspectedNode) {
+                updateSatelliteInspector(currentInspectedNode);
+            }
+        }
+
+        // Zoom Main Map to Street/Building Level Satellite View
+        function zoomToCurrentSatLocation() {
+            if (currentInspectedNode && typeof currentInspectedNode.lat === 'number') {
+                if (activeBaseLayer !== 'google_hybrid' && activeBaseLayer !== 'google_sat') {
+                    switchBaseLayer('google_hybrid');
+                }
+                map.flyTo([currentInspectedNode.lat, currentInspectedNode.lon], 16, { duration: 1.5 });
+            }
+        }
+
+        // Check Backend Health & Fetch Origin Node (Hop 0)
+        async function checkBackend() {
+            const statusDot = document.getElementById('statusDot');
+            const headerText = document.getElementById('headerStatusText');
+            const originBadge = document.getElementById('originBadge');
+
+            const baseUrl = window.location.origin.includes('http') ? window.location.origin : 'http://localhost:8000';
+
+            try {
+                const res = await fetch(`${baseUrl}/api/origin`);
+                if (res.ok) {
+                    const data = await res.json();
+                    statusDot.className = 'status-dot ready';
+                    headerText.innerText = 'Connected (Port 8000)';
+
+                    if (data.origin) {
+                        originNode = data.origin;
+                        const locText = [originNode.city, originNode.country].filter(Boolean).join(', ');
+                        originBadge.innerText = `Origin: ${locText || originNode.ip}`;
+                        updateSatelliteInspector(originNode, 'Hop 0 (Your Location)');
+                    }
+                } else {
+                    throw new Error('Backend non-200');
+                }
+            } catch (err) {
+                statusDot.className = 'status-dot error';
+                headerText.innerText = 'Backend Offline';
+                originBadge.innerText = 'Run python TracerouteProject.py';
+            }
+        }
+
+        function setPreset(domain) {
+            document.getElementById('targetInput').value = domain;
+            if (!isTracing) {
+                startTrace();
+            }
+        }
+
+        // Haversine Distance (in km)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function updateDistanceStat() {
+            if (geoNodes.length < 2) {
+                document.getElementById('statDistance').innerText = '0 km';
+                return;
+            }
+            let totalKm = 0;
+            for (let i = 0; i < geoNodes.length - 1; i++) {
+                totalKm += calculateDistance(
+                    geoNodes[i].lat, geoNodes[i].lon,
+                    geoNodes[i + 1].lat, geoNodes[i + 1].lon
+                );
+            }
+            document.getElementById('statDistance').innerText = `${Math.round(totalKm).toLocaleString()} km`;
+        }
+
+        function updateLatencyStat() {
+            const rtts = hopsData.filter(h => typeof h.rtt === 'number').map(h => h.rtt);
+            if (rtts.length > 0) {
+                const avg = (rtts.reduce((a, b) => a + b, 0) / rtts.length).toFixed(1);
+                document.getElementById('statLatency').innerText = `${avg} ms`;
+            } else {
+                document.getElementById('statLatency').innerText = '--';
+            }
+        }
+
+        function clearMapAndResults() {
+            if (activeEventSource) {
+                activeEventSource.close();
+                activeEventSource = null;
+            }
+            if (polylineLayer) {
+                map.removeLayer(polylineLayer);
+                polylineLayer = null;
+            }
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            geoNodes = [];
+            hopsData = [];
+
+            document.getElementById('hopsList').innerHTML = `
+                <div style="text-align: center; padding: 18px 0; color: var(--text-dim); font-size: 0.82rem;">
+                    No active trace. Start a trace to inspect live hops.
+                </div>
+            `;
+            document.getElementById('statHops').innerText = '0';
+            document.getElementById('statHopsSub').innerText = '0 Geolocated';
+            document.getElementById('statLatency').innerText = '--';
+            document.getElementById('statDistance').innerText = '0 km';
+            document.getElementById('statStatus').innerText = 'Idle';
+            document.getElementById('statTarget').innerText = 'None';
+            document.getElementById('hopCountHeader').innerText = '0 Hops';
+        }
+
+        // Add a Node to the Map & Polyline with Google Maps Satellite Hybrid Thumb
+        function addMapNode(node, markerType = 'hop', label = '') {
+            if (!node || typeof node.lat !== 'number' || typeof node.lon !== 'number') return;
+
+            const marker = L.marker([node.lat, node.lon], {
+                icon: createPulsingIcon(markerType)
+            }).addTo(map);
+
+            const satThumbUrl = getGoogleSatelliteTileUrl(node.lat, node.lon, 13);
+            const gmapsUrl = node.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${node.lat},${node.lon}`;
+
+            const popupContent = `
+                <div class="popup-card">
+                    <img src="${satThumbUrl}" class="popup-satellite-thumb" alt="Google Satellite view of ${node.city || 'location'}" />
+                    <div class="popup-title">
+                        <span>${label || ('Hop ' + (node.hop || ''))}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-dim);">${node.rtt ? node.rtt + ' ms' : ''}</span>
+                    </div>
+                    <div class="popup-grid">
+                        <span class="popup-label">IP:</span>
+                        <span class="popup-val">${node.ip || 'Unknown'}</span>
+                        <span class="popup-label">Location:</span>
+                        <span class="popup-val">${[node.city, node.country].filter(Boolean).join(', ') || 'Unknown'}</span>
+                        <span class="popup-label">ISP:</span>
+                        <span class="popup-val">${node.isp || node.org || 'N/A'}</span>
+                        <span class="popup-label">Coords:</span>
+                        <span class="popup-val">${node.lat.toFixed(3)}°, ${node.lon.toFixed(3)}°</span>
+                    </div>
+                    <div class="popup-actions">
+                        <button class="btn-popup-action" onclick="map.flyTo([${node.lat}, ${node.lon}], 16)">🛰️ Street Zoom</button>
+                        <a class="btn-popup-action" href="${gmapsUrl}" target="_blank">🌐 Google Maps</a>
+                    </div>
+                </div>
+            `;
+            marker.bindPopup(popupContent);
+            markers.push(marker);
+
+            geoNodes.push(node);
+            updateSatelliteInspector(node, label);
+
+            // Redraw Glowing Polyline
+            const latlngs = geoNodes.map(n => [n.lat, n.lon]);
+            if (polylineLayer) {
+                map.removeLayer(polylineLayer);
+            }
+            if (latlngs.length > 1) {
+                polylineLayer = L.polyline(latlngs, {
+                    color: '#06b6d4',
+                    weight: 3.5,
+                    opacity: 0.9,
+                    dashArray: '6, 8',
+                    lineCap: 'round'
+                }).addTo(map);
+
+                map.fitBounds(polylineLayer.getBounds(), { padding: [60, 60], maxZoom: 10 });
+            } else if (latlngs.length === 1) {
+                map.setView(latlngs[0], 5);
+            }
+
+            updateDistanceStat();
+            document.getElementById('statHopsSub').innerText = `${geoNodes.length} Geolocated`;
+        }
+
+        // Add Hop Row to Sidebar
+        function addHopToSidebar(hop) {
+            const hopsList = document.getElementById('hopsList');
+            if (hopsData.length === 1) {
+                hopsList.innerHTML = '';
+            }
+
+            const item = document.createElement('div');
+            item.className = 'hop-item';
+            item.id = `hop-item-${hop.hop}`;
+
+            let latencyClass = 'timeout';
+            let latencyText = '* Timed Out';
+            if (typeof hop.rtt === 'number') {
+                if (hop.rtt < 35) latencyClass = 'fast';
+                else if (hop.rtt < 90) latencyClass = 'medium';
+                else latencyClass = 'slow';
+                latencyText = `${hop.rtt} ms`;
+            }
+
+            const geo = hop.geo;
+            const locationStr = geo ? [geo.city, geo.country].filter(Boolean).join(', ') : (hop.ip ? 'Internal / Gateway' : 'No Response');
+            const ispStr = geo ? (geo.isp || geo.org || '') : '';
+
+            item.innerHTML = `
+                <div class="hop-left">
+                    <div class="hop-badge">${hop.hop}</div>
+                    <div class="hop-details">
+                        <span class="hop-ip">${hop.ip || '---.---.---.---'}</span>
+                        <span class="hop-location">
+                            ${geo ? '📍 ' : '🔒 '}${locationStr}
+                        </span>
+                    </div>
+                </div>
+                <div class="hop-right">
+                    <span class="latency-tag ${latencyClass}">${latencyText}</span>
+                    <span class="hop-isp" title="${ispStr}">${ispStr}</span>
+                </div>
+            `;
+
+            item.onclick = () => {
+                document.querySelectorAll('.hop-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+
+                if (geo && typeof geo.lat === 'number') {
+                    updateSatelliteInspector({ ...geo, rtt: hop.rtt, ip: hop.ip }, `Hop ${hop.hop}`);
+                    map.flyTo([geo.lat, geo.lon], 12, { duration: 1.2 });
+                    const marker = markers.find(m => {
+                        const pos = m.getLatLng();
+                        return Math.abs(pos.lat - geo.lat) < 0.001 && Math.abs(pos.lng - geo.lon) < 0.001;
+                    });
+                    if (marker) marker.openPopup();
+                }
+            };
+
+            hopsList.appendChild(item);
+            hopsList.scrollTop = hopsList.scrollHeight;
+
+            document.getElementById('statHops').innerText = hopsData.length;
+            document.getElementById('hopCountHeader').innerText = `${hopsData.length} Hops`;
+            updateLatencyStat();
+        }
+
+        // Add Origin Hop (Hop 0)
+        function renderOriginHop(origin) {
+            if (!origin) return;
+            const hopsList = document.getElementById('hopsList');
+            hopsList.innerHTML = '';
+
+            const item = document.createElement('div');
+            item.className = 'hop-item active';
+            item.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            item.innerHTML = `
+                <div class="hop-left">
+                    <div class="hop-badge origin">0</div>
+                    <div class="hop-details">
+                        <span class="hop-ip">${origin.ip || 'Your Public IP'}</span>
+                        <span class="hop-location">🟢 Origin: ${[origin.city, origin.country].filter(Boolean).join(', ')}</span>
+                    </div>
+                </div>
+                <div class="hop-right">
+                    <span class="latency-tag fast">0 ms</span>
+                    <span class="hop-isp">${origin.isp || 'Local'}</span>
+                </div>
+            `;
+            hopsList.appendChild(item);
+
+            addMapNode(origin, 'origin', 'Hop 0 (Your Location)');
+            updateSatelliteInspector(origin, 'Hop 0 (Your Location)');
+        }
+
+        // Main Trace Trigger
+        async function startTrace() {
+            if (isTracing) return;
+
+            const targetInput = document.getElementById('targetInput');
+            const target = targetInput.value.trim();
+            const maxHops = document.getElementById('maxHopsSelect').value;
+
+            if (!target) {
+                alert('Please enter a target domain or IP address.');
+                return;
+            }
+
+            clearMapAndResults();
+            isTracing = true;
+
+            const btn = document.getElementById('traceBtn');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const btnIcon = document.getElementById('btnIcon');
+            const statusDot = document.getElementById('statusDot');
+
+            btn.disabled = true;
+            btnSpinner.style.display = 'block';
+            btnIcon.style.display = 'none';
+            btnText.innerText = 'Tracing Route...';
+            statusDot.className = 'status-dot active';
+            document.getElementById('statStatus').innerText = 'Active';
+            document.getElementById('statTarget').innerText = target;
+
+            const baseUrl = window.location.origin.includes('http') ? window.location.origin : 'http://localhost:8000';
+            const streamUrl = `${baseUrl}/api/trace/stream?target=${encodeURIComponent(target)}&max_hops=${maxHops}`;
+
+            try {
+                activeEventSource = new EventSource(streamUrl);
+
+                activeEventSource.onmessage = (event) => {
+                    try {
+                        const payload = JSON.parse(event.data);
+
+                        if (payload.type === 'origin') {
+                            if (payload.data) {
+                                renderOriginHop(payload.data);
+                            }
+                        } else if (payload.type === 'hop') {
+                            const hop = payload.data;
+                            hopsData.push(hop);
+                            addHopToSidebar(hop);
+
+                            if (hop.geo) {
+                                addMapNode({
+                                    ...hop.geo,
+                                    hop: hop.hop,
+                                    rtt: hop.rtt,
+                                    ip: hop.ip
+                                }, 'hop', `Hop ${hop.hop}`);
+                            }
+                        } else if (payload.type === 'done') {
+                            finishTrace(payload.target, payload.total_hops);
+                        }
+                    } catch (err) {
+                        console.error('SSE event error:', err);
+                    }
+                };
+
+                activeEventSource.onerror = async () => {
+                    if (activeEventSource) {
+                        activeEventSource.close();
+                        activeEventSource = null;
+                    }
+                    if (hopsData.length === 0) {
+                        await runTraceFallback(target, maxHops, baseUrl);
+                    } else {
+                        finishTrace(target, hopsData.length);
+                    }
+                };
+
+            } catch (error) {
+                await runTraceFallback(target, maxHops, baseUrl);
+            }
+        }
+
+        // Fallback for non-SSE environments
+        async function runTraceFallback(target, maxHops, baseUrl) {
+            try {
+                const res = await fetch(`${baseUrl}/api/trace?target=${encodeURIComponent(target)}&max_hops=${maxHops}`);
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+                const data = await res.json();
+
+                if (data.origin) {
+                    renderOriginHop(data.origin);
+                }
+
+                if (Array.isArray(data.hops)) {
+                    data.hops.forEach(hop => {
+                        hopsData.push(hop);
+                        addHopToSidebar(hop);
+                        if (hop.geo) {
+                            addMapNode({
+                                ...hop.geo,
+                                hop: hop.hop,
+                                rtt: hop.rtt,
+                                ip: hop.ip
+                            }, 'hop', `Hop ${hop.hop}`);
+                        }
+                    });
+                }
+                finishTrace(target, hopsData.length);
+            } catch (err) {
+                const statusDot = document.getElementById('statusDot');
+                statusDot.className = 'status-dot error';
+                resetButtonState();
+            }
+        }
+
+        function finishTrace(target, totalHops) {
+            if (activeEventSource) {
+                activeEventSource.close();
+                activeEventSource = null;
+            }
+
+            if (geoNodes.length > 1) {
+                const lastMarker = markers[markers.length - 1];
+                if (lastMarker) {
+                    lastMarker.setIcon(createPulsingIcon('target'));
+                }
+            }
+
+            const statusDot = document.getElementById('statusDot');
+            statusDot.className = 'status-dot ready';
+            document.getElementById('statStatus').innerText = 'Finished';
+            resetButtonState();
+        }
+
+        function resetButtonState() {
+            isTracing = false;
+            const btn = document.getElementById('traceBtn');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const btnIcon = document.getElementById('btnIcon');
+
+            btn.disabled = false;
+            btnSpinner.style.display = 'none';
+            btnIcon.style.display = 'block';
+            btnText.innerText = 'Start Visual Trace';
+        }
+
+        function exportTraceData() {
+            if (hopsData.length === 0) {
+                alert('No trace data to export. Please run a trace first!');
+                return;
+            }
+            const exportObj = {
+                timestamp: new Date().toISOString(),
+                target: document.getElementById('targetInput').value,
+                origin: originNode,
+                hops: hopsData,
+                geolocated_nodes: geoNodes
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `traceroute_${exportObj.target}_google_sat.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            checkBackend();
+
+            document.getElementById('targetInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    startTrace();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
